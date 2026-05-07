@@ -1,0 +1,25 @@
+{
+  "best_model_type": "random_forest",
+  "accuracy": 0.744,
+  "f1_score": 0.7431786587642899,
+  "results": [
+    {
+      "model_type": "random_forest",
+      "accuracy": 0.744,
+      "f1_score": 0.7431786587642899,
+      "model_path": "models/candidates/random_forest.pkl"
+    },
+    {
+      "model_type": "gradient_boosting",
+      "accuracy": 0.606,
+      "f1_score": 0.6032463862570706,
+      "model_path": "models/candidates/gradient_boosting.pkl"
+    },
+    {
+      "model_type": "logistic_regression",
+      "accuracy": 0.532,
+      "f1_score": 0.5134266961105152,
+      "model_path": "models/candidates/logistic_regression.pkl"
+    }
+  ]
+}

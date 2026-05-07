@@ -1,0 +1,22 @@
+{
+  "reference_path": "data/eval.csv",
+  "current_path": "data/train_phase1.csv",
+  "threshold": 0.25,
+  "drift_detected": false,
+  "max_drift_score": 0.06994797626968736,
+  "drifted_features": [],
+  "feature_scores": {
+    "fixed acidity": 0.046187038221901816,
+    "volatile acidity": 0.06994797626968736,
+    "citric acid": 0.036059759551562064,
+    "residual sugar": 0.016643657098627324,
+    "chlorides": 0.027221094762453345,
+    "free sulfur dioxide": 0.02496510582962793,
+    "total sulfur dioxide": 0.044047722520646704,
+    "density": 0.03669562537562803,
+    "pH": 0.03424572705980178,
+    "sulphates": 0.0693943899869045,
+    "alcohol": 0.023718462792650438,
+    "wine_type": 0.02968986582191307
+  }
+}
