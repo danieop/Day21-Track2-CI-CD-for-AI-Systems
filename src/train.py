@@ -39,7 +39,9 @@ def train(
     with mlflow.start_run():
         mlflow.log_params(params)
 
-        model = RandomForestClassifier(**params, random_state=42)
+        model_params = dict(params)
+        random_state = model_params.pop("random_state", 42)
+        model = RandomForestClassifier(**model_params, random_state=random_state)
         model.fit(X_train, y_train)
 
         preds = model.predict(X_eval)
