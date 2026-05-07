@@ -2,7 +2,9 @@ import os
 import json
 import numpy as np
 import pandas as pd
-from src.train import train
+from src.drift import check_data_drift
+from src.report import generate_report
+from src.train import build_model, run_configured_experiments, train
 
 
 FEATURE_NAMES = [
@@ -76,3 +78,69 @@ def test_model_file_created(tmp_path):
     )
 
     assert os.path.exists("models/model.pkl")
+
+
+def test_build_model_supports_multiple_algorithms():
+    """Kiem tra Bonus 2: train.py ho tro nhieu thuat toan."""
+    assert build_model("random_forest", {"n_estimators": 5}) is not None
+    assert build_model("gradient_boosting", {"n_estimators": 5}) is not None
+    assert build_model("logistic_regression", {"max_iter": 100}) is not None
+
+
+def test_run_configured_experiments_selects_best_model(tmp_path):
+    """Kiem tra viec chay nhieu model va luu metrics tong hop."""
+    train_path, eval_path = _make_temp_data(tmp_path)
+    config = {
+        "experiments": ["random_forest", "logistic_regression"],
+        "random_forest": {"n_estimators": 5, "max_depth": 3},
+        "logistic_regression": {"max_iter": 100},
+    }
+
+    summary = run_configured_experiments(
+        config,
+        data_path=train_path,
+        eval_path=eval_path,
+    )
+
+    assert "best_model_type" in summary
+    assert len(summary["results"]) == 2
+    assert os.path.exists("models/model.pkl")
+
+
+def test_drift_report_and_performance_report_created(tmp_path):
+    """Kiem tra Bonus 3 va Bonus 5 tao report tu dong."""
+    train_path, eval_path = _make_temp_data(tmp_path)
+    drift_path = str(tmp_path / "drift_report.json")
+    metrics_path = str(tmp_path / "metrics.json")
+    report_path = str(tmp_path / "performance_report.md")
+
+    drift = check_data_drift(
+        reference_path=eval_path,
+        current_path=train_path,
+        output_path=drift_path,
+    )
+    with open(metrics_path, "w") as f:
+        json.dump(
+            {
+                "best_model_type": "random_forest",
+                "accuracy": 0.8,
+                "f1_score": 0.79,
+                "results": [
+                    {
+                        "model_type": "random_forest",
+                        "accuracy": 0.8,
+                        "f1_score": 0.79,
+                    }
+                ],
+            },
+            f,
+        )
+
+    generate_report(
+        metrics_path=metrics_path,
+        drift_path=drift_path,
+        output_path=report_path,
+    )
+
+    assert "feature_scores" in drift
+    assert os.path.exists(report_path)

@@ -5,6 +5,13 @@
 Final RandomForest configuration:
 
 ```yaml
+model_type: random_forest
+experiments:
+  - random_forest
+  - gradient_boosting
+  - logistic_regression
+
+random_forest:
 n_estimators: 200
 max_depth:
 min_samples_split: 2
@@ -55,3 +62,11 @@ The deployed API responds successfully:
 GET /health -> {"status":"ok"}
 POST /predict -> {"prediction":0,"label":"thap"}
 ```
+
+## Bonus Implementation
+
+- Bonus 1: GitHub Actions reads `MLFLOW_TRACKING_URI`, `MLFLOW_TRACKING_USERNAME`, and `MLFLOW_TRACKING_PASSWORD` from GitHub Secrets, so training runs are logged to the DagsHub MLflow server.
+- Bonus 2: `src/train.py` supports `random_forest`, `gradient_boosting`, and `logistic_regression`; `params.yaml` runs all three and saves the best model.
+- Bonus 3: `src/report.py` generates `outputs/performance_report.md`, uploaded by CI as the `training-reports` artifact.
+- Bonus 4: models are stored under `models/runs/<commit-sha>/model.pkl`; `.github/workflows/rollback.yml` can promote any previous key back to `models/latest/model.pkl` and redeploy.
+- Bonus 5: `src/drift.py` writes `outputs/drift_report.json` before training, and the report includes drift status and drifted features.

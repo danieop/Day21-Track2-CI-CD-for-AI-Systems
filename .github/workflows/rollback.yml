@@ -1,0 +1,76 @@
+name: Rollback Model
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_key:
+        description: "Versioned model key, for example models/runs/<commit-sha>/model.pkl"
+        required: true
+        type: string
+
+jobs:
+  rollback:
+    name: Promote selected model and redeploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Cloud Storage
+        run: |
+          echo "AWS_ACCESS_KEY_ID=${{ secrets.SPACES_ACCESS_KEY }}" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.SPACES_SECRET_KEY }}" >> $GITHUB_ENV
+          echo "AWS_DEFAULT_REGION=${{ secrets.SPACES_REGION }}" >> $GITHUB_ENV
+          echo "SPACES_REGION=${{ secrets.SPACES_REGION }}" >> $GITHUB_ENV
+          echo "SPACES_ENDPOINT_URL=https://${{ secrets.SPACES_REGION }}.digitaloceanspaces.com" >> $GITHUB_ENV
+          echo "SPACES_BUCKET=${{ secrets.CLOUD_BUCKET }}" >> $GITHUB_ENV
+
+      - name: Promote selected model to latest
+        run: |
+          python - <<'EOF'
+          import os
+          import boto3
+
+          bucket = os.environ["SPACES_BUCKET"]
+          endpoint_url = os.environ["SPACES_ENDPOINT_URL"]
+          region = os.environ["SPACES_REGION"]
+          source_key = "${{ inputs.model_key }}"
+          latest_key = "models/latest/model.pkl"
+
+          s3 = boto3.client("s3", endpoint_url=endpoint_url, region_name=region)
+          s3.head_object(Bucket=bucket, Key=source_key)
+          s3.copy_object(
+              Bucket=bucket,
+              CopySource={"Bucket": bucket, "Key": source_key},
+              Key=latest_key,
+          )
+          print(f"Rolled back s3://{bucket}/{source_key} -> s3://{bucket}/{latest_key}")
+          EOF
+
+      - name: Upload serving code to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          source: "src/serve.py"
+          target: "/root/"
+          strip_components: 0
+
+      - name: SSH redeploy to VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            mkdir -p ~/models
+            sudo systemctl restart mlops-serve
+            for i in 1 2 3 4 5 6; do
+              if curl -sf http://localhost:8000/health; then
+                echo "Rollback health check passed."
+                exit 0
+              fi
+              sleep 5
+            done
+            sudo journalctl -u mlops-serve -n 80 --no-pager
+            exit 1

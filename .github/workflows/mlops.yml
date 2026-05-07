@@ -48,6 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       accuracy: ${{ steps.read_metrics.outputs.accuracy }}
+      model_key: ${{ steps.model_key.outputs.model_key }}
 
     steps:
       - uses: actions/checkout@v4
@@ -67,9 +68,30 @@ jobs:
           echo "SPACES_REGION=${{ secrets.SPACES_REGION }}" >> $GITHUB_ENV
           echo "SPACES_ENDPOINT_URL=https://${{ secrets.SPACES_REGION }}.digitaloceanspaces.com" >> $GITHUB_ENV
           echo "SPACES_BUCKET=${{ secrets.CLOUD_BUCKET }}" >> $GITHUB_ENV
+          echo "MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}" >> $GITHUB_ENV
+          echo "MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}" >> $GITHUB_ENV
+          echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}" >> $GITHUB_ENV
 
       - name: Pull data with DVC
         run: dvc pull data/train_phase1.csv.dvc data/eval.csv.dvc
+
+      - name: Check data drift
+        run: python -m src.drift
+
+      - name: Emit drift warning
+        run: |
+          python - <<'EOF'
+          import json
+
+          with open("outputs/drift_report.json") as f:
+              report = json.load(f)
+
+          if report["drift_detected"]:
+              features = ", ".join(report["drifted_features"])
+              print(f"::warning title=Data drift detected::Drifted features: {features}")
+          else:
+              print("No data drift detected.")
+          EOF
 
       - name: Train model
         run: python src/train.py
@@ -80,7 +102,14 @@ jobs:
           ACC=$(python -c "import json; d=json.load(open('outputs/metrics.json')); print(d['accuracy'])")
           echo "accuracy=$ACC" >> "$GITHUB_OUTPUT"
 
-      - name: Upload model to Cloud Storage
+      - name: Generate performance report
+        run: python -m src.report
+
+      - name: Prepare versioned model key
+        id: model_key
+        run: echo "model_key=models/runs/${GITHUB_SHA}/model.pkl" >> "$GITHUB_OUTPUT"
+
+      - name: Upload versioned model to Cloud Storage
         run: |
           python - <<'EOF'
           import os
@@ -89,17 +118,21 @@ jobs:
           bucket = os.environ["SPACES_BUCKET"]
           endpoint_url = os.environ["SPACES_ENDPOINT_URL"]
           region = os.environ["SPACES_REGION"]
+          key = "models/runs/{}/model.pkl".format(os.environ["GITHUB_SHA"])
 
           s3 = boto3.client("s3", endpoint_url=endpoint_url, region_name=region)
-          s3.upload_file("models/model.pkl", bucket, "models/latest/model.pkl")
-          print(f"Uploaded model to s3://{bucket}/models/latest/model.pkl")
+          s3.upload_file("models/model.pkl", bucket, key)
+          print(f"Uploaded model to s3://{bucket}/{key}")
           EOF
 
-      - name: Save metrics as artifact
+      - name: Save reports as artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: metrics
-          path: outputs/metrics.json
+          name: training-reports
+          path: |
+            outputs/metrics.json
+            outputs/drift_report.json
+            outputs/performance_report.md
 
 
   # ---------------------------------------------------------------------------
@@ -124,15 +157,54 @@ jobs:
           print(f"PASSED: accuracy {acc:.4f} >= {threshold:.2f}. Dang trien khai model.")
           EOF
 
+  # ---------------------------------------------------------------------------
+  # JOB 4 - PROMOTE
+  # Chi promote model thanh latest sau khi qua eval gate.
+  # ---------------------------------------------------------------------------
+  promote:
+    name: Promote latest model
+    needs: [train, eval]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate to Cloud Storage
+        run: |
+          echo "AWS_ACCESS_KEY_ID=${{ secrets.SPACES_ACCESS_KEY }}" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.SPACES_SECRET_KEY }}" >> $GITHUB_ENV
+          echo "AWS_DEFAULT_REGION=${{ secrets.SPACES_REGION }}" >> $GITHUB_ENV
+          echo "SPACES_REGION=${{ secrets.SPACES_REGION }}" >> $GITHUB_ENV
+          echo "SPACES_ENDPOINT_URL=https://${{ secrets.SPACES_REGION }}.digitaloceanspaces.com" >> $GITHUB_ENV
+          echo "SPACES_BUCKET=${{ secrets.CLOUD_BUCKET }}" >> $GITHUB_ENV
+
+      - name: Copy versioned model to latest
+        run: |
+          python - <<'EOF'
+          import os
+          import boto3
+
+          bucket = os.environ["SPACES_BUCKET"]
+          endpoint_url = os.environ["SPACES_ENDPOINT_URL"]
+          region = os.environ["SPACES_REGION"]
+          source_key = "${{ needs.train.outputs.model_key }}"
+          latest_key = "models/latest/model.pkl"
+
+          s3 = boto3.client("s3", endpoint_url=endpoint_url, region_name=region)
+          s3.copy_object(
+              Bucket=bucket,
+              CopySource={"Bucket": bucket, "Key": source_key},
+              Key=latest_key,
+          )
+          print(f"Promoted s3://{bucket}/{source_key} -> s3://{bucket}/{latest_key}")
+          EOF
+
 
   # ---------------------------------------------------------------------------
-  # JOB 4 - DEPLOY
+  # JOB 5 - DEPLOY
   # Trien khai len VM qua SSH.
-  # Chi chay khi Job 3 (Eval) hoan thanh thanh cong.
+  # Chi chay khi model da duoc promote thanh latest.
   # ---------------------------------------------------------------------------
   deploy:
     name: Deploy
-    needs: eval
+    needs: promote
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
