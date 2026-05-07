@@ -118,7 +118,7 @@ jobs:
         run: |
           python - <<'EOF'
           acc = float("${{ needs.train.outputs.accuracy }}")
-          threshold = 0.55
+          threshold = 0.70
           if acc < threshold:
               raise SystemExit(f"FAILED: accuracy {acc:.4f} < {threshold:.2f}. Huy deploy.")
           print(f"PASSED: accuracy {acc:.4f} >= {threshold:.2f}. Dang trien khai model.")
