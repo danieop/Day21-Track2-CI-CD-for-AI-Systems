@@ -7,6 +7,7 @@ data/eval.csv
 data/train_phase2.csv
 sa-key.json
 .env
+.dvc/config.local
 .venv/
 __pycache__/
 *.pyc

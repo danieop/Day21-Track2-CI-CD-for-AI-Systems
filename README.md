@@ -195,15 +195,14 @@ __pycache__/
 mlflow==2.13.0
 scikit-learn==1.4.2
 pandas==2.2.2
-# DVC extra theo provider: [gs]=GCP, [s3]=AWS, [azure]=Azure
-dvc[gs]==3.50.1
+# DigitalOcean Spaces uses the S3-compatible DVC extra.
+dvc[s3]==3.50.1
 pathspec==0.11.2
 pytest==8.2.0
 fastapi==0.111.0
 uvicorn==0.29.0
 joblib==1.4.2
-# Cloud SDK theo provider: google-cloud-storage (GCP), boto3 (AWS), azure-storage-blob (Azure)
-google-cloud-storage==2.16.0
+boto3==1.43.0
 pyyaml==6.0.1
 ```
 
@@ -216,6 +215,8 @@ pyyaml==6.0.1
 | 1 | Thực nghiệm cục bộ và theo dõi bằng MLflow | tasks/buoc-1.md |
 | 2 | Pipeline CI/CD tự động với GitHub Actions và DVC | tasks/buoc-2.md |
 | 3 | Huấn luyện liên tục khi có dữ liệu mới | tasks/buoc-3.md |
+
+DigitalOcean path: xem `tasks/digitalocean-setup.md` nếu dùng Spaces và Droplet thay cho GCP/AWS/Azure.
 
 Bắt đầu từ [Bước 1](tasks/buoc-1.md).
 

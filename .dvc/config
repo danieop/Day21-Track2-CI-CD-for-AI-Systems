@@ -1,0 +1,6 @@
+[core]
+    remote = myremote
+['remote "myremote"']
+    url = s3://danieospace/dvc
+    endpointurl = https://sgp1.digitaloceanspaces.com
+    region = sgp1
